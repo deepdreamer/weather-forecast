@@ -1,0 +1,9 @@
+parameters:
+  level: 9
+  paths:
+      - app
+  bootstrapFiles:
+      - vendor/codeigniter4/framework/system/Test/bootstrap.php
+  excludePaths:
+      - app/Views/errors/
+      - app/Config/Events.php

@@ -1,0 +1,6 @@
+# Build artifacts
+build/
+
+# Writable directory (runtime files)
+writable/logs/*.log
+writable/debugbar/*.json
