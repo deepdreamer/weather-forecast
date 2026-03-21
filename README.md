@@ -52,6 +52,18 @@ CI_ENVIRONMENT = development
 chmod -R 777 weather-forecast/writable
 ```
 
+4. Install dependencies:
+
+```bash
+docker compose up -d
+```
+
+5. Install dependencies:
+
+```bash
+docker compose exec app composer install
+```
+
 ---
 
 ## Running tests & static analysis
