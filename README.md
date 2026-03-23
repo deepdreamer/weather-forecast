@@ -6,6 +6,10 @@ A simple REST API built with CodeIgniter 4 that returns weather forecasts for Cz
 
 `POST /api/weather`
 
+### Implementation of endpoint
+
+`weather-forecast/app/Controllers/Api/Weather.php`
+
 ### Request
 
 ```json
