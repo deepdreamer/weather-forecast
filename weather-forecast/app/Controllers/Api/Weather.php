@@ -2,6 +2,7 @@
 
 namespace App\Controllers\Api;
 
+use App\Exceptions\WeatherApiException;
 use App\Services\WeatherService;
 use App\Validators\Exception\InvalidRequest;
 use App\Validators\WeatherForecastValidator;
@@ -37,7 +38,14 @@ class Weather extends Controller
         $city = City::tryFrom(
             $this->requestValidator->validate($requestBody)->cityName
         ) ?? throw new InvalidRequest('Invalid city.', 404);
-        $forecast = $this->weatherService->getWeatherForecastForCity($city);
+        try {
+            $forecast = $this->weatherService->getWeatherForecastForCity($city);
+        } catch (WeatherApiException $e) {
+            log_message('error', '[WeatherApiException] {message}', ['message' => $e->getMessage()]);
+            return $this->response->setStatusCode(503)->setJson([
+                'error' => 'Weather data is currently unavailable.',
+            ]);
+        }
 
         return $this->response->setJson([
             'city' => ucfirst($city->value),

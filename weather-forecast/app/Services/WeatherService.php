@@ -7,6 +7,7 @@ use App\Enums\City;
 use App\Exceptions\WeatherApiException;
 use App\ValueObjects\WeatherForecast;
 use CodeIgniter\HTTP\CURLRequest;
+use CodeIgniter\HTTP\ResponseInterface;
 use Config\Services;
 use Config\Weather;
 
@@ -52,7 +53,7 @@ class WeatherService
         ];
         $url = $baseUrl . '?' . http_build_query($params);
 
-        $apiResponse = $this->client->get($url);
+        $apiResponse = $this->fetchWithRetry($url);
 
         if ($apiResponse->getStatusCode() !== 200) {
             throw new WeatherApiException('API error: HTTP ' . $apiResponse->getStatusCode());
@@ -77,6 +78,35 @@ class WeatherService
 
         /** @var array{daily: array{time: array<int, string>, temperature_2m_max: array<int, float|int>, temperature_2m_min: array<int, float|int>}} $data */
         return $data;
+    }
+
+    private function fetchWithRetry(string $url): ResponseInterface
+    {
+        $maxAttempts = 3;
+        $lastException = null;
+
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            try {
+                $response = $this->client->get($url, [
+                    'timeout'         => 5,
+                    'connect_timeout' => 3,
+                ]);
+
+                if ($response->getStatusCode() < 500) {
+                    return $response;
+                }
+
+                $lastException = new WeatherApiException('API error: HTTP ' . $response->getStatusCode());
+            } catch (\Exception $e) {
+                $lastException = new WeatherApiException('API error: ' . $e->getMessage());
+            }
+
+            if ($attempt < $maxAttempts) {
+                usleep(500_000 * $attempt); // 500ms, then 1000ms
+            }
+        }
+
+        throw $lastException;
     }
 
     /** @param array<string, mixed> $data */
