@@ -34,7 +34,17 @@ final class WeatherControllerTest extends CIUnitTestCase
         ]);
     }
 
-    private function injectMockResponse(int $statusCode, string $body): void
+    public function testReturns503WhenApiFails(): void
+    {
+        $this->injectMockResponse(500, null);
+
+        $result = $this->withBodyFormat('json')->post('api/weather', ['city' => 'Praha']);
+
+        $result->assertStatus(503);
+        $result->assertJSONFragment(['error' => 'Weather data is currently unavailable.']);
+    }
+
+    private function injectMockResponse(int $statusCode, ?string $body): void
     {
         $mockResponse = $this->createMock(ResponseInterface::class);
         $mockResponse->method('getStatusCode')->willReturn($statusCode);
