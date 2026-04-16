@@ -8,6 +8,7 @@ use App\Exceptions\WeatherApiException;
 use App\ValueObjects\WeatherForecast;
 use CodeIgniter\HTTP\CURLRequest;
 use Config\Services;
+use Config\Weather;
 
 class WeatherService
 {
@@ -41,9 +42,15 @@ class WeatherService
     {
         $coords = $city->getCoordinates();
         $timezone = $city->getTimezone();
-        $forecastDays = 7;
-        $dailySetting = 'temperature_2m_max,temperature_2m_min';
-        $url = "https://api.open-meteo.com/v1/forecast?latitude={$coords->latitude}&longitude={$coords->longitude}&daily=$dailySetting&timezone=$timezone&forecast_days=$forecastDays";
+        $baseUrl = config(Weather::class)->apiBaseUrl;
+        $params = [
+            'latitude'     => $coords->latitude,
+            'longitude'    => $coords->longitude,
+            'daily'        => 'temperature_2m_max,temperature_2m_min',
+            'timezone'     => $timezone,
+            'forecast_days' => 7,
+        ];
+        $url = $baseUrl . '?' . http_build_query($params);
 
         $apiResponse = $this->client->get($url);
 

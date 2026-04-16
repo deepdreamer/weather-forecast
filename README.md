@@ -105,3 +105,8 @@ docker compose exec app curl -X POST http://nginx/api/weather \
   -H "Content-Type: application/json" \
   -d '{"city": "ostrava"}'
 ```
+
+```bash
+curl -v --connect-timeout 5 -X POST http://localhost:8080/api/weather -H "Content-Type: application/json" -d '{"city": "praha"}'
+
+```

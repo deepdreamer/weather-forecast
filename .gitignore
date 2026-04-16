@@ -122,5 +122,11 @@ _modules/*
 # Visual Studio Code
 .vscode/
 
+#-------------------------
+# Claude / Personal Notes
+#-------------------------
+claude-session-*.md
+test.sh
+
 /weather-forecast/results/
 /weather-forecast/phpunit*.xml
