@@ -5,6 +5,7 @@ namespace unit;
 use App\Enums\City;
 use App\Exceptions\WeatherApiException;
 use App\Services\WeatherService;
+use App\ValueObjects\WeatherForecast;
 use CodeIgniter\HTTP\CURLRequest;
 use CodeIgniter\HTTP\ResponseInterface;
 use CodeIgniter\Test\CIUnitTestCase;
@@ -21,7 +22,7 @@ final class WeatherServiceTest extends CIUnitTestCase
 
     public function testThrowsOnNonSuccessfulHttpStatus(): void
     {
-        $this->injectMockResponse(500, null);
+        $this->injectMockResponseWithBody(500, null);
 
         $this->expectException(WeatherApiException::class);
         $this->expectExceptionMessage('API error: HTTP 500');
@@ -31,14 +32,14 @@ final class WeatherServiceTest extends CIUnitTestCase
 
     public function testThrowsOnInvalidJson(): void
     {
-        $this->injectMockResponse(200, null);
+        $this->injectMockResponseWithBody(200, null);
 
         $this->expectException(WeatherApiException::class);
         $this->expectExceptionMessage('API error: Invalid JSON');
 
         (new WeatherService())->getWeatherForecastForCity(City::PRAHA);
 
-        $this->injectMockResponse(200, '');
+        $this->injectMockResponseWithBody(200, '');
 
         $this->expectException(WeatherApiException::class);
         $this->expectExceptionMessage('API error: Invalid JSON');
@@ -48,7 +49,7 @@ final class WeatherServiceTest extends CIUnitTestCase
 
     public function testThrowsOnErrorByThirdParty(): void
     {
-        $this->injectMockResponse(200, <<<'JSON'
+        $this->injectMockResponseWithBody(200, <<<'JSON'
         {
           "error": true,
           "reason": "Cannot initialize WeatherVariable from invalid String value tempeture_2m for key hourly"
@@ -63,7 +64,74 @@ final class WeatherServiceTest extends CIUnitTestCase
         (new WeatherService())->getWeatherForecastForCity(City::PRAHA);
     }
 
-    private function injectMockResponse(int $statusCode, ?string $body): void
+    public function testRetryOn5xx(): void
+    {
+        $validBody = '{"daily":{"time":["2026-04-16"],"temperature_2m_max":[15.0],"temperature_2m_min":[5.0]}}';
+
+        $mockClient = $this->createMock(CURLRequest::class);
+        $mockClient->expects($this->exactly(3))
+            ->method('get')
+            ->willReturnOnConsecutiveCalls(
+                $this->givenMockResponse(500, null),
+                $this->givenMockResponse(500, null),
+                $this->givenMockResponse(200, $validBody),
+            );
+
+        Services::injectMock('curlrequest', $mockClient);
+
+        $result = (new WeatherService())->getWeatherForecastForCity(City::PRAHA);
+        $this->assertSame(City::PRAHA, $result->city);
+    }
+
+    public function testNetworkExceptionTriggersRetryAndRecovers(): void
+    {
+        $validBody = '{"daily":{"time":["2026-04-16"],"temperature_2m_max":[15.0],"temperature_2m_min":[5.0]}}';
+
+        $mockClient = $this->createMock(CURLRequest::class);
+        $mockClient->expects($this->exactly(2))
+            ->method('get')
+            ->willReturnOnConsecutiveCalls(
+                $this->throwException(new \Exception('Connection timed out')),
+                $this->givenMockResponse(200, $validBody),
+            );
+
+        Services::injectMock('curlrequest', $mockClient);
+
+        $result = (new WeatherService())->getWeatherForecastForCity(City::PRAHA);
+        $this->assertSame(City::PRAHA, $result->city);
+    }
+
+    public function testExhaustingRetries(): void
+    {
+        $mockClient = $this->createMock(CURLRequest::class);
+        $mockClient->expects($this->exactly(3))
+            ->method('get')
+            ->willReturnOnConsecutiveCalls(
+                $this->givenMockResponse(500, null),
+                $this->givenMockResponse(500, null),
+                $this->givenMockResponse(500, null),
+            );
+
+        Services::injectMock('curlrequest', $mockClient);
+
+        $this->expectException(WeatherApiException::class);
+        (new WeatherService())->getWeatherForecastForCity(City::PRAHA);
+    }
+
+    public function testNoRetriesFor4xx(): void
+    {
+        $mockClient = $this->createMock(CURLRequest::class);
+        $mockClient->expects($this->exactly(1))
+            ->method('get')
+            ->willReturn($this->givenMockResponse(404, null));
+
+        Services::injectMock('curlrequest', $mockClient);
+
+        $this->expectException(WeatherApiException::class);
+        (new WeatherService())->getWeatherForecastForCity(City::PRAHA);
+    }
+
+    private function injectMockResponseWithBody(int $statusCode, ?string $body): void
     {
         $mockResponse = $this->createMock(ResponseInterface::class);
         $mockResponse->method('getStatusCode')->willReturn($statusCode);
@@ -73,5 +141,13 @@ final class WeatherServiceTest extends CIUnitTestCase
         $mockClient->method('get')->willReturn($mockResponse);
 
         Services::injectMock('curlrequest', $mockClient);
+    }
+
+    private function givenMockResponse(int $statusCode, ?string $body): ResponseInterface
+    {
+        $response = $this->createMock(ResponseInterface::class);
+        $response->method('getStatusCode')->willReturn($statusCode);
+        $response->method('getBody')->willReturn($body);
+        return $response;
     }
 }
